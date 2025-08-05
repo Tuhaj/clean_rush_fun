@@ -2,33 +2,36 @@
 
 # Unit tests for configuration management
 
-# Get script directory
+# Get script and project directories
 TEST_SCRIPT_DIR="$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")")"
+PROJECT_ROOT="$(dirname "$(dirname "$TEST_SCRIPT_DIR")")"
 
 # Source test utilities
 source "$TEST_SCRIPT_DIR/../test_utils.zsh"
 
+# Source the config module
+SCRIPT_DIR="$PROJECT_ROOT"
+source "$PROJECT_ROOT/lib/config.zsh"
+
 test_group "Configuration Management Tests"
 
-# Test config file parsing
+# Test config file parsing with new modular functions
 test_config_file_parsing() {
     setup_test_env
     
+    # Set up test config paths
+    export CONFIG_FILE="$TEST_DIR/test_excludes.conf"
+    
     # Create a test config file
-    local config_file="$TEST_DIR/test_excludes.conf"
-    cat > "$config_file" << EOF
+    cat > "$CONFIG_FILE" << EOF
 o:Other
 p:Projects
 a:Archive
 t:Temp
 EOF
     
-    # Parse config file
-    declare -A ASSIGNED_KEYS
-    while IFS=: read -r key folder; do
-        key=$(echo "$key" | tr '[:upper:]' '[:lower:]')
-        ASSIGNED_KEYS[$key]="$folder"
-    done < "$config_file"
+    # Use the new modular function to load shortcuts
+    load_shortcuts_and_exclusions
     
     assert_equals "Other" "${ASSIGNED_KEYS[o]}" "Should parse 'o' key for Other folder"
     assert_equals "Projects" "${ASSIGNED_KEYS[p]}" "Should parse 'p' key for Projects folder"
@@ -38,13 +41,15 @@ EOF
     teardown_test_env
 }
 
-# Test stats file parsing
+# Test stats file parsing with new modular functions
 test_stats_file_parsing() {
     setup_test_env
     
+    # Set up test stats file path
+    export STATS_FILE="$TEST_DIR/test_stats.conf"
+    
     # Create a test stats file
-    local stats_file="$TEST_DIR/test_stats.conf"
-    cat > "$stats_file" << EOF
+    cat > "$STATS_FILE" << EOF
 total_sessions:5
 total_sorts:42
 total_points:500
@@ -53,22 +58,8 @@ achievement_8:1234567890
 achievement_16:1234567900
 EOF
     
-    # Parse stats file
-    TOTAL_SESSIONS=0
-    TOTAL_SORTS=0
-    TOTAL_POINTS=0
-    TOTAL_TIME=0
-    declare -A ACHIEVEMENTS
-    
-    while IFS=: read -r key value; do
-        case "$key" in
-            total_sessions) TOTAL_SESSIONS=$value ;;
-            total_sorts) TOTAL_SORTS=$value ;;
-            total_points) TOTAL_POINTS=$value ;;
-            total_time) TOTAL_TIME=$value ;;
-            achievement_*) ACHIEVEMENTS[${key#achievement_}]=$value ;;
-        esac
-    done < "$stats_file"
+    # Use the new modular function to load stats
+    load_stats
     
     assert_equals "5" "$TOTAL_SESSIONS" "Should parse total sessions"
     assert_equals "42" "$TOTAL_SORTS" "Should parse total sorts"
@@ -80,54 +71,75 @@ EOF
     teardown_test_env
 }
 
-# Test config file creation
+# Test config file creation with new modular functions
 test_config_file_creation() {
     setup_test_env
     
-    local config_file="$TEST_DIR/new_config.conf"
+    export CONFIG_FILE="$TEST_DIR/new_config.conf"
     local test_key="x"
     local test_folder="TestFolder"
     
-    # Write to config file
-    echo "$test_key:$test_folder" >> "$config_file"
+    # Use the new modular function to add folder shortcut
+    add_folder_shortcut "$test_key" "$test_folder"
     
-    assert_file_exists "$config_file" "Config file should be created"
+    assert_file_exists "$CONFIG_FILE" "Config file should be created"
     
     # Read back the content
-    local content=$(cat "$config_file")
+    local content=$(cat "$CONFIG_FILE")
     assert_contains "$content" "x:TestFolder" "Config should contain the new entry"
     
     teardown_test_env
 }
 
-# Test stats file saving
+# Test stats file saving with new modular functions
 test_stats_file_saving() {
     setup_test_env
     
-    local stats_file="$TEST_DIR/save_stats.conf"
+    export STATS_FILE="$TEST_DIR/save_stats.conf"
     
-    # Set test values
-    local test_sessions=3
-    local test_sorts=25
-    local test_points=300
-    local test_time=1800
+    # Set test values in global variables (as the new function expects)
+    TOTAL_SESSIONS=2  # Will be incremented by 1 in save_stats
+    TOTAL_SORTS=20
+    TOTAL_POINTS=250
+    TOTAL_TIME=1500
     
-    # Save stats
-    {
-        echo "total_sessions:$test_sessions"
-        echo "total_sorts:$test_sorts"
-        echo "total_points:$test_points"
-        echo "total_time:$test_time"
-    } > "$stats_file"
+    # Mock session values
+    local session_start_time=$(($(date +%s) - 300))  # 5 minutes ago
+    local session_sorts=5
+    local session_points=50
     
-    assert_file_exists "$stats_file" "Stats file should be created"
+    # Use the new modular function to save stats
+    save_stats "$session_start_time" "$session_sorts" "$session_points"
+    
+    assert_file_exists "$STATS_FILE" "Stats file should be created"
     
     # Verify content
-    local content=$(cat "$stats_file")
-    assert_contains "$content" "total_sessions:3" "Should save total sessions"
-    assert_contains "$content" "total_sorts:25" "Should save total sorts"
-    assert_contains "$content" "total_points:300" "Should save total points"
-    assert_contains "$content" "total_time:1800" "Should save total time"
+    local content=$(cat "$STATS_FILE")
+    assert_contains "$content" "total_sessions:3" "Should save total sessions (incremented)"
+    assert_contains "$content" "total_sorts:25" "Should save total sorts (original + session)"
+    assert_contains "$content" "total_points:300" "Should save total points (original + session)"
+    assert_contains "$content" "total_time:" "Should save total time entry"
+    
+    teardown_test_env
+}
+
+# Test exclusion checking
+test_exclusion_checking() {
+    setup_test_env
+    
+    # Set up excludes
+    EXCLUDES=(".DS_Store" ".localized" "TestFolder")
+    
+    # Test excluded items
+    is_excluded ".DS_Store"
+    assert_equals "0" "$?" "Should exclude .DS_Store"
+    
+    is_excluded "TestFolder"
+    assert_equals "0" "$?" "Should exclude TestFolder"
+    
+    # Test non-excluded items
+    is_excluded "regularfile.txt"
+    assert_equals "1" "$?" "Should not exclude regular file"
     
     teardown_test_env
 }
@@ -137,3 +149,4 @@ test_config_file_parsing
 test_stats_file_parsing
 test_config_file_creation
 test_stats_file_saving
+test_exclusion_checking

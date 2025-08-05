@@ -2,46 +2,49 @@
 
 # Unit tests for points and achievements system
 
-# Get script directory
+# Get script and project directories
 TEST_SCRIPT_DIR="$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")")"
+PROJECT_ROOT="$(dirname "$(dirname "$TEST_SCRIPT_DIR")")"
 
 # Source test utilities
 source "$TEST_SCRIPT_DIR/../test_utils.zsh"
 
+# Source the gamification and config modules
+SCRIPT_DIR="$PROJECT_ROOT"
+source "$PROJECT_ROOT/lib/config.zsh"
+source "$PROJECT_ROOT/lib/gamification.zsh"
+
 test_group "Points System Tests"
 
-# Test point values
+# Test point values using new modular functions
 test_point_values() {
-    # Define point values as in main script
-    POINTS_MOVE=10
-    POINTS_DELETE=5
-    POINTS_GO_MODE=1
-    POINTS_NEW_FOLDER=20
-    
+    # The constants are defined in the gamification module
     assert_equals "10" "$POINTS_MOVE" "Move points should be 10"
     assert_equals "5" "$POINTS_DELETE" "Delete points should be 5"
     assert_equals "1" "$POINTS_GO_MODE" "Go mode points should be 1"
     assert_equals "20" "$POINTS_NEW_FOLDER" "New folder points should be 20"
 }
 
-# Test session points calculation
+# Test session points calculation using new modular functions
 test_session_points_calculation() {
-    SESSION_POINTS=0
-    POINTS_MOVE=10
-    POINTS_DELETE=5
+    init_gamification
     
-    # Simulate moving 3 files
-    SESSION_POINTS=$((SESSION_POINTS + POINTS_MOVE))
-    SESSION_POINTS=$((SESSION_POINTS + POINTS_MOVE))
-    SESSION_POINTS=$((SESSION_POINTS + POINTS_MOVE))
+    # Test awarding points for different actions
+    award_points "move"
+    assert_equals "10" "$LAST_POINTS_AWARDED" "Should award 10 points for move"
+    assert_equals "10" "$SESSION_POINTS" "Session points should be updated"
     
-    assert_equals "30" "$SESSION_POINTS" "Should have 30 points after 3 moves"
+    award_points "delete"
+    assert_equals "5" "$LAST_POINTS_AWARDED" "Should award 5 points for delete"
+    assert_equals "15" "$SESSION_POINTS" "Session points should accumulate"
     
-    # Simulate deleting 2 files
-    SESSION_POINTS=$((SESSION_POINTS + POINTS_DELETE))
-    SESSION_POINTS=$((SESSION_POINTS + POINTS_DELETE))
+    award_points "go_mode"
+    assert_equals "1" "$LAST_POINTS_AWARDED" "Should award 1 point for go mode"
+    assert_equals "16" "$SESSION_POINTS" "Session points should continue accumulating"
     
-    assert_equals "40" "$SESSION_POINTS" "Should have 40 points after 3 moves and 2 deletes"
+    award_points "new_folder"
+    assert_equals "20" "$LAST_POINTS_AWARDED" "Should award 20 points for new folder"
+    assert_equals "36" "$SESSION_POINTS" "Session points should reach 36"
 }
 
 # Test achievement thresholds
@@ -55,36 +58,45 @@ test_achievement_thresholds() {
     assert_equals "1024" "${achievement_thresholds[8]}" "Last achievement at 1024 items"
 }
 
-# Test achievement unlocking logic
+# Test achievement unlocking logic using new modular functions
 test_achievement_unlock_logic() {
+    init_gamification
+    
+    # Set up test conditions for achievement unlock
     TOTAL_SORTS=7
     SESSION_SORTS=1
-    declare -A ACHIEVEMENTS
+    declare -gA ACHIEVEMENTS
     
-    local new_total=$((TOTAL_SORTS + SESSION_SORTS))
-    local threshold=8
+    # Test unlocking achievement when crossing threshold
+    check_achievements
+    local unlock_result=$?
+    assert_equals "0" "$unlock_result" "Should unlock achievement when crossing threshold from 7+1=8"
     
-    # Check if achievement should be unlocked
-    if [[ $new_total -ge $threshold && $TOTAL_SORTS -lt $threshold ]]; then
-        local should_unlock="true"
-    else
-        local should_unlock="false"
-    fi
+    # Verify achievement was recorded
+    assert_equals "1" "${#ACHIEVEMENTS[@]}" "Should have one achievement unlocked"
     
-    assert_equals "true" "$should_unlock" "Should unlock achievement when crossing threshold"
-    
-    # Test when already past threshold
+    # Test when already past threshold - reset for clean test
     TOTAL_SORTS=10
     SESSION_SORTS=1
-    new_total=$((TOTAL_SORTS + SESSION_SORTS))
     
-    if [[ $new_total -ge $threshold && $TOTAL_SORTS -lt $threshold ]]; then
-        should_unlock="true"
-    else
-        should_unlock="false"
-    fi
+    check_achievements
+    local no_unlock_result=$?
+    assert_equals "1" "$no_unlock_result" "Should not unlock when already past threshold"
+}
+
+# Test session tracking
+test_session_tracking() {
+    init_gamification
     
-    assert_equals "false" "$should_unlock" "Should not unlock when already past threshold"
+    # Test sort tracking
+    assert_equals "0" "$SESSION_SORTS" "Should start with 0 sorts"
+    
+    track_sort
+    assert_equals "1" "$SESSION_SORTS" "Should have 1 sort after tracking"
+    
+    track_sort
+    track_sort
+    assert_equals "3" "$SESSION_SORTS" "Should have 3 sorts after tracking 3 times"
 }
 
 # Run tests
@@ -92,3 +104,4 @@ test_point_values
 test_session_points_calculation
 test_achievement_thresholds
 test_achievement_unlock_logic
+test_session_tracking

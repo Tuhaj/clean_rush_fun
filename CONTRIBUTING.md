@@ -26,7 +26,6 @@ When creating a bug report, include:
 4. **Actual behavior**
 5. **System information** (macOS version, ZSH version)
 6. **Relevant log entries** from `move_desktop_items.log`
-7. **Screenshots** if applicable
 
 ### Suggesting Enhancements
 
@@ -48,16 +47,15 @@ Enhancement suggestions are welcome! Please provide:
 ## Development Setup
 
 ### Prerequisites
-- macOS or Linux
-- ZSH shell (install via package manager on Linux)
+- macOS (for testing Finder integration)
+- ZSH shell
 - Git
-- For Linux testing: `gio` or `trash-cli` (optional but recommended)
 
 ### Local Development
 
 1. Fork and clone the repository:
 ```bash
-git clone git@github.com:Tuhaj/clean_rush_fun.git
+git clone https://github.com/yourusername/clean_rush_fun.git
 cd clean_rush_fun
 ```
 
@@ -66,7 +64,7 @@ cd clean_rush_fun
 git checkout -b feature/your-feature-name
 ```
 
-3. Make your changes to `clean_rush_fun.zsh`
+3. Make your changes to the appropriate module(s) in `lib/` or main script
 
 4. Test your changes:
 ```bash
@@ -83,6 +81,48 @@ touch ~/Desktop/test_cleanup/file{1..5}.txt
 git add .
 git commit -m "Add: brief description of your change"
 ```
+
+## Project Architecture
+
+CleanRush uses a **modular architecture** to make development and maintenance easier. Understanding this structure will help you contribute more effectively.
+
+### Module Overview
+
+```
+clean_rush_fun/
+├── clean_rush_fun.zsh      # Main entry point (lightweight orchestrator)
+├── lib/                    # Modular components
+│   ├── config.zsh         # Configuration & persistence
+│   ├── gamification.zsh   # Points & achievements
+│   ├── file_operations.zsh # File handling & OS operations
+│   ├── ui.zsh            # Display & user interface
+│   └── setup.zsh         # First-time setup wizard
+└── tests/                 # Test suite (updated for modules)
+```
+
+### When to Edit Which Module
+
+- **Configuration changes** (new config options, stats formats) → `lib/config.zsh`
+- **Points/achievements features** (new point values, achievement types) → `lib/gamification.zsh`
+- **File operations** (new platforms, file handling) → `lib/file_operations.zsh`
+- **UI improvements** (colors, messages, display formats) → `lib/ui.zsh`
+- **Setup wizard changes** (folder creation, validation) → `lib/setup.zsh`
+- **Main flow changes** (game loop, orchestration) → `clean_rush_fun.zsh`
+
+### Module Dependencies
+
+- All modules can use functions from `config.zsh` (logging, configuration)
+- `setup.zsh` imports `ui.zsh`, `config.zsh`, and `file_operations.zsh`
+- `gamification.zsh` uses `ui.zsh` for achievement display
+- Main script imports all modules in the correct order
+
+### Adding New Features
+
+1. **Identify the right module** for your feature
+2. **Add your function** to the appropriate module
+3. **Export any new global variables** that other modules need
+4. **Update tests** in the corresponding test file
+5. **Update main script** if you need to call your function from the game loop
 
 ## Coding Standards
 
@@ -133,71 +173,13 @@ Use existing color variables for consistency:
 
 ## Testing Guidelines
 
-### Automated Testing
-
-CleanRush includes a comprehensive test suite. **All tests must pass before submitting a PR**.
-
-#### Running Tests
-```bash
-# Run all tests
-./tests/run_tests.zsh
-
-# Run only unit tests
-for test in tests/unit/test_*.zsh; do $test; done
-
-# Run only integration tests
-for test in tests/integration/test_*.zsh; do $test; done
-
-# Run a specific test file
-./tests/unit/test_os_detection.zsh
-```
-
-#### Test Structure
-- `tests/run_tests.zsh` - Simple test runner
-- `tests/test_utils.zsh` - Testing utilities and assertions
-- `tests/unit/` - Unit tests for individual functions
-- `tests/integration/` - Integration tests for complete workflows
-- `tests/fixtures/` - Test data and mocks
-
-#### Writing New Tests
-When adding new features, include corresponding tests:
-
-```zsh
-#!/bin/zsh
-source "$(dirname "$0")/../test_utils.zsh"
-
-test_group "My Feature Tests"
-
-test_my_new_feature() {
-    setup_test_env
-    
-    # Arrange
-    create_test_file "test.txt"
-    
-    # Act
-    # Your feature code here
-    
-    # Assert
-    assert_file_exists "$TEST_DESKTOP/test.txt"
-    
-    teardown_test_env
-}
-
-# Run the test
-test_my_new_feature
-```
-
 ### Manual Testing Checklist
 
-In addition to automated tests, manually verify:
+Before submitting a PR, test:
 
 - [ ] First-time setup flow
 - [ ] File moving to each folder type
 - [ ] File deletion (Trash integration)
-  - [ ] macOS: Finder trash via `osascript`
-  - [ ] Linux: `gio trash` (if available)
-  - [ ] Linux: `trash-put` (if available)
-  - [ ] Linux: Fallback to `~/.local/share/Trash/files`
 - [ ] Skip functionality
 - [ ] Go Mode activation and processing
 - [ ] New folder creation
@@ -206,7 +188,6 @@ In addition to automated tests, manually verify:
 - [ ] Stats persistence across sessions
 - [ ] Config file updates
 - [ ] Log file entries
-- [ ] OS detection (verify correct OS is detected)
 
 ### Edge Cases to Test
 
@@ -216,20 +197,6 @@ In addition to automated tests, manually verify:
 4. **Very long filenames**
 5. **Files with spaces** in names
 6. **Interrupted sessions** (Ctrl+C handling)
-
-### Platform-Specific Testing
-
-#### macOS Testing
-- Verify Finder trash integration works correctly
-- Test with `.DS_Store` and `.localized` files
-- Confirm items appear in Trash and can be restored
-
-#### Linux Testing
-- Test on different distributions (Ubuntu, Fedora, Arch, etc.)
-- Verify trash utilities detection order (`gio` → `trash-put` → fallback)
-- Test on different desktop environments (GNOME, KDE, XFCE)
-- Confirm XDG trash directory is created if needed
-- Verify trash operations work without GUI environment (server/SSH)
 
 ## Feature Ideas
 
@@ -280,7 +247,6 @@ Update documentation when you:
 ## Getting Help
 
 ### Resources
-- Visit the website: [https://www.cleanrush.fun/](https://www.cleanrush.fun/)
 - Check existing issues and discussions
 - Review the README and documentation
 - Look at previous pull requests

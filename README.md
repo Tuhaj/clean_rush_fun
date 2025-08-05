@@ -29,6 +29,37 @@ A gamified desktop file organizer for macOS and Linux that makes cleaning your d
 - Total points earned
 - Achievement gallery
 
+## Architecture
+
+CleanRush uses a modular architecture for easy maintenance and contribution. The main script is broken down into focused modules:
+
+```
+clean_rush_fun/
+├── clean_rush_fun.zsh      # Main entry point (lightweight, imports modules)
+├── lib/                    # Modular components
+│   ├── config.zsh         # Configuration management (loading/saving config, stats)
+│   ├── gamification.zsh   # Points, achievements, and progress tracking
+│   ├── file_operations.zsh # File operations, OS detection, trash handling
+│   ├── ui.zsh            # Colors, display functions, user interface
+│   └── setup.zsh         # First-time setup and folder creation
+├── tests/                 # Comprehensive test suite
+└── [config files]        # Generated configuration and stats files
+```
+
+### Module Responsibilities
+
+- **`config.zsh`**: Handles all configuration file operations, stats persistence, logging, and exclusions
+- **`gamification.zsh`**: Manages the points system, achievement tracking, and session statistics
+- **`file_operations.zsh`**: Cross-platform file operations, OS detection, and trash functionality
+- **`ui.zsh`**: User interface elements, colors, display formatting, and input handling
+- **`setup.zsh`**: First-time setup wizard and interactive folder management
+
+This modular design makes it easy to:
+- **Contribute**: Work on specific features without touching unrelated code
+- **Test**: Each module can be tested independently
+- **Maintain**: Clear separation of concerns and responsibilities
+- **Extend**: Add new features by creating new modules or extending existing ones
+
 ## Installation
 
 ### Prerequisites
